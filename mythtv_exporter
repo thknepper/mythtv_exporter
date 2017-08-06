@@ -1,0 +1,93 @@
+#! /usr/bin/python -W ignore
+
+# mythtv_exporter
+
+# Copyright 2017 Thomas Knepper
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from MythTV import *
+from prometheus_client import start_http_server,Gauge
+import time
+import datetime
+import argparse
+
+recorder_count_gauge = Gauge('mythtv_recorder_count', 'Number of recorder')
+active_recorder_count_gauge = Gauge('mythtv_active_recorder_count', 'Number of active recorder')
+
+recordings_count_gauge = Gauge("mythtv_recordings_count", "Recordings", ['recgroup'])
+recordings_size_kb_gauge = Gauge("mythtv_recordings_size_kb", "Recordings", ['recgroup'])
+recordings_time_seconds_gauge = Gauge("mythtv_recordings_playback_time_seconds", "Recordings", ['recgroup'])
+
+upcoming_recordings_count_gauge = Gauge("mythtv_upcoming_recordings_count", "Upcoming Recordings", ['recgroup'])
+
+
+def retrieve_metrics():
+    mythtv = MythBE()
+
+    active_recorder_count = 0
+    recorder_count = 0
+    for recorder in mythtv.getRecorderList():
+        recorder_count += 1
+        if mythtv.isRecording(recorder):
+            active_recorder_count += 1
+
+    rec_groups = {}
+    recordings_count = 0
+    for rec in mythtv.getRecordings():
+        recordings_count += 1
+        e = rec_groups.get(rec.recgroup, {"count": 0, "size": 0, "seconds": 0} )
+        e["count"] += 1
+        e["size"] += rec.filesize
+        e["seconds"] += (rec.recendts-rec.recstartts).total_seconds()
+        rec_groups[rec.recgroup] = e
+
+    up_groups = {}
+    upcoming_recordings_count = 0
+    for rec in mythtv.getUpcomingRecordings():
+        upcoming_recordings_count += 1
+        e = up_groups.get(rec.recgroup, {"count": 0} )
+        e["count"] += 1
+        up_groups[rec.recgroup] = e
+
+    recorder_count_gauge.set(recorder_count)
+    active_recorder_count_gauge.set(active_recorder_count)
+
+    for g,c in rec_groups.items():
+        recordings_count_gauge.labels(g).set(c["count"])
+        recordings_size_kb_gauge.labels(g).set(c["size"] / 1024)
+        recordings_time_seconds_gauge.labels(g).set(c["seconds"])
+
+    for g,c in up_groups.items():
+        upcoming_recordings_count_gauge.labels(g).set(c["count"])
+
+    return
+
+
+def main():
+
+    parser = argparse.ArgumentParser(description='export metrics from  MythTV to prometheus')
+    parser.add_argument('--port', dest='port', default='9111', type=int)
+    parser.add_argument('--interval', dest='interval', default='30', type=int)
+    args = parser.parse_args()
+
+    # Start up the server to expose the metrics.
+    start_http_server(args.port)
+
+    while True:
+        retrieve_metrics()
+        time.sleep(args.interval)    # seconds
+
+
+if __name__ == '__main__':
+    main()
