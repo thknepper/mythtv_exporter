@@ -2,6 +2,7 @@
 
 This is a simple server that scrapes MythTV stats and exports them via HTTP for [Prometheus](http://prometheus.io) consumption.
 
+Metrics are exported over TCP port 9380.
 
 ## Getting Started
 

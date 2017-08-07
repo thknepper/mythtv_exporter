@@ -77,7 +77,7 @@ def retrieve_metrics():
 def main():
 
     parser = argparse.ArgumentParser(description='export metrics from  MythTV to prometheus')
-    parser.add_argument('--port', dest='port', default='9111', type=int)
+    parser.add_argument('--port', dest='port', default='9380', type=int)
     parser.add_argument('--interval', dest='interval', default='30', type=int)
     args = parser.parse_args()
 
